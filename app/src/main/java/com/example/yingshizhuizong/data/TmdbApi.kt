@@ -164,6 +164,38 @@ object TmdbApi {
     /** TMDB 作品详情里的演员 */
     data class CastMember(val name: String, val character: String)
 
+    /** 剧集的一季 */
+    data class Season(
+        val seasonNumber: Int,
+        val name: String,
+        val episodeCount: Int,
+        val airDate: Long?,
+        val posterUrl: String,
+        val overview: String,
+    )
+
+    /** 剧集的一集 */
+    data class Episode(
+        val seasonNumber: Int,
+        val episodeNumber: Int,
+        val name: String,
+        val airDate: Long?,
+        val overview: String,
+        val stillUrl: String,
+    )
+
+    /** 相似影片推荐里的一条 */
+    data class Recommendation(
+        val tmdbId: Int,
+        val title: String,
+        val originalTitle: String,
+        val type: WatchType,
+        val posterUrl: String,
+        val releaseDate: Long?,
+        val rating: Float,
+        val category: WatchCategory,
+    )
+
     /** 作品详情：简介 + 导演 / 制片 / 主演 */
     data class Details(
         val overview: String,
@@ -256,6 +288,96 @@ object TmdbApi {
             category = WatchCategory.fromTmdbIds(genreIds),
         )
     }
+
+    /**
+     * 剧集的季列表（不含「特别篇」季，season_number = 0）。
+     * 失败返回 null。
+     */
+    suspend fun fetchSeasons(tvId: Int): List<Season>? = withContext(Dispatchers.IO) {
+        if (API_KEY.isBlank() || tvId <= 0) return@withContext null
+        val url = "$BASE/tv/$tvId?api_key=$API_KEY&language=zh-CN"
+        val json = getJson(url) ?: return@withContext null
+        val arr = json.optJSONArray("seasons") ?: return@withContext emptyList()
+        val list = mutableListOf<Season>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val number = o.optInt("season_number", -1)
+            if (number <= 0) continue
+            list += Season(
+                seasonNumber = number,
+                name = o.optString("name").trim(),
+                episodeCount = o.optInt("episode_count", 0),
+                airDate = parseTmdbDate(o.optString("air_date").trim()),
+                posterUrl = tmdbImageUrl(o.optString("poster_path"), "w342"),
+                overview = o.optString("overview").trim(),
+            )
+        }
+        list.sortedBy { it.seasonNumber }
+    }
+
+    /** 某一季的集列表；失败返回 null */
+    suspend fun fetchSeasonEpisodes(tvId: Int, seasonNumber: Int): List<Episode>? =
+        withContext(Dispatchers.IO) {
+            if (API_KEY.isBlank() || tvId <= 0 || seasonNumber <= 0) return@withContext null
+            val url = "$BASE/tv/$tvId/season/$seasonNumber?api_key=$API_KEY&language=zh-CN"
+            val json = getJson(url) ?: return@withContext null
+            val arr = json.optJSONArray("episodes") ?: return@withContext emptyList()
+            val list = mutableListOf<Episode>()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val number = o.optInt("episode_number", 0)
+                if (number <= 0) continue
+                list += Episode(
+                    seasonNumber = seasonNumber,
+                    episodeNumber = number,
+                    name = o.optString("name").trim(),
+                    airDate = parseTmdbDate(o.optString("air_date").trim()),
+                    overview = o.optString("overview").trim(),
+                    stillUrl = tmdbImageUrl(o.optString("still_path"), "w300"),
+                )
+            }
+            list.sortedBy { it.episodeNumber }
+        }
+
+    /**
+     * 相似影片推荐：电影用 /recommendations，剧集用 /tv/{id}/recommendations。
+     * 失败返回 null；空列表表示 TMDB 没有推荐。
+     */
+    suspend fun fetchRecommendations(type: WatchType, tmdbId: Int): List<Recommendation>? =
+        withContext(Dispatchers.IO) {
+            if (API_KEY.isBlank() || tmdbId <= 0) return@withContext null
+            val url = "$BASE/${endpointOf(type)}/$tmdbId/recommendations?api_key=$API_KEY" +
+                "&language=zh-CN&page=1"
+            val json = getJson(url) ?: return@withContext null
+            val arr = json.optJSONArray("results") ?: return@withContext emptyList()
+            val list = mutableListOf<Recommendation>()
+            for (i in 0 until arr.length()) {
+                if (list.size >= 12) break
+                val o = arr.optJSONObject(i) ?: continue
+                val isMovie = type == WatchType.MOVIE
+                val title = o.optString(if (isMovie) "title" else "name").trim()
+                if (title.isEmpty()) continue
+                val original = o.optString(if (isMovie) "original_title" else "original_name").trim()
+                val dateRaw = o.optString(if (isMovie) "release_date" else "first_air_date").trim()
+                val genreIds = o.optJSONArray("genre_ids")?.let { ids ->
+                    (0 until ids.length()).map { ids.optInt(it) }
+                }.orEmpty()
+                list += Recommendation(
+                    tmdbId = o.optInt("id", 0),
+                    title = title,
+                    originalTitle = original,
+                    type = type,
+                    posterUrl = tmdbImageUrl(o.optString("poster_path"), "w342"),
+                    releaseDate = parseTmdbDate(dateRaw),
+                    rating = o.optDouble("vote_average", 0.0).toFloat(),
+                    category = WatchCategory.fromTmdbIds(genreIds),
+                )
+            }
+            list
+        }
+
+    private fun tmdbImageUrl(path: String, size: String): String =
+        if (path.isBlank() || path == "null") "" else "https://image.tmdb.org/t/p/$size$path"
 
     /** 搜索并返回最匹配的一条结果：先带年份精确搜索，没有再放宽年份 */
     private fun searchFirst(type: WatchType, title: String, year: Int?): JSONObject? {

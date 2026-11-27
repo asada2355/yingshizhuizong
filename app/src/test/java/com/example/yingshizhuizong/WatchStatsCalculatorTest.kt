@@ -140,6 +140,33 @@ class WatchStatsCalculatorTest {
     }
 
     @Test
+    fun `series in progress lists only watching tv with progress`() {
+        val items = listOf(
+            WatchItem(
+                id = 1, title = "剧集A", type = WatchType.TV_SERIES,
+                status = WatchStatus.WATCHING, seasonNumber = 2, episodeNumber = 5,
+            ),
+            WatchItem(
+                id = 2, title = "剧集B", type = WatchType.TV_SERIES,
+                status = WatchStatus.WATCHING, seasonNumber = 0, episodeNumber = 0,
+            ),
+            WatchItem(
+                id = 3, title = "剧集C", type = WatchType.TV_SERIES,
+                status = WatchStatus.WATCHED, seasonNumber = 1, episodeNumber = 10,
+            ),
+            WatchItem(
+                id = 4, title = "电影", type = WatchType.MOVIE,
+                status = WatchStatus.WATCHING, seasonNumber = 1, episodeNumber = 1,
+            ),
+        )
+        val stats = WatchStatsCalculator.overview(items, zone = zone)
+        assertEquals(1, stats.seriesInProgress.size)
+        assertEquals("剧集A", stats.seriesInProgress.first().item.title)
+        assertEquals(2, stats.seriesInProgress.first().seasonNumber)
+        assertEquals(5, stats.seriesInProgress.first().episodeNumber)
+    }
+
+    @Test
     fun `empty list produces empty stats`() {
         val stats = WatchStatsCalculator.overview(emptyList(), zone = zone)
         assertEquals(0, stats.total)

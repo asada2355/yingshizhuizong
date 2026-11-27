@@ -26,6 +26,12 @@ data class WatchItem(
     val notifiedForDate: Long? = null,
     /** 标记为「已看」的时间（epoch 毫秒），用于观影统计与年度报告；null 表示还没看 */
     val watchedAt: Long? = null,
+    /** 剧集看到第几季（从 1 开始；0 表示还没开始） */
+    @ColumnInfo(defaultValue = "0")
+    val seasonNumber: Int = 0,
+    /** 剧集看到第几集（从 1 开始；0 表示这一季还没看） */
+    @ColumnInfo(defaultValue = "0")
+    val episodeNumber: Int = 0,
     /** TMDB 的作品 id（用于拉取简介、演职员、预告片），0 表示尚未解析 */
     @ColumnInfo(defaultValue = "0")
     val tmdbId: Int = 0,

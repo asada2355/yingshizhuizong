@@ -54,6 +54,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yingshizhuizong.data.entity.WatchCategory
 import com.example.yingshizhuizong.data.entity.WatchItem
 import com.example.yingshizhuizong.data.entity.WatchStatus
+import com.example.yingshizhuizong.data.entity.WatchType
 import com.example.yingshizhuizong.ui.components.PosterImage
 import com.example.yingshizhuizong.ui.components.color
 import com.example.yingshizhuizong.ui.components.label
@@ -221,6 +222,9 @@ private fun WatchItemCard(
                 val meta = buildList {
                     add(item.type.label())
                     add(item.category.label)
+                    if (item.type == WatchType.TV_SERIES && item.seasonNumber > 0) {
+                        add("S${item.seasonNumber} E${item.episodeNumber}")
+                    }
                     item.releaseDate?.let { add(formatDate(it)) }
                     if (item.rating > 0f) add("★ ${item.rating}")
                 }.joinToString(" · ")

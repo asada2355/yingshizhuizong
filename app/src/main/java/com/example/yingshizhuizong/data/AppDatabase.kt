@@ -14,7 +14,7 @@ import com.example.yingshizhuizong.data.entity.WatchItem
 
 @Database(
     entities = [WatchItem::class, Note::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -68,6 +68,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v5 → v6：新增剧集追更进度（看到第几季第几集）。
+         * 老数据默认 0，表示还没开始追。
+         */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE watch_items ADD COLUMN seasonNumber INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE watch_items ADD COLUMN episodeNumber INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -75,7 +86,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "yingshi_tracker.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                     .also { INSTANCE = it }
             }

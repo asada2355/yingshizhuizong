@@ -64,6 +64,10 @@ interface WatchItemDao {
     @Query("SELECT COUNT(*) FROM watch_items WHERE title = :title AND type = :type")
     suspend fun countByTitle(title: String, type: WatchType): Int
 
+    /** 相似推荐添加前判重：同一个 TMDB 作品是否已在看单里 */
+    @Query("SELECT COUNT(*) FROM watch_items WHERE tmdbId = :tmdbId AND tmdbId > 0")
+    suspend fun countByTmdbId(tmdbId: Int): Int
+
     /** 小组件：即将上映（限制条数，已看的自动移出） */
     @Query("SELECT * FROM watch_items WHERE status != 'WATCHED' AND releaseDate IS NOT NULL AND releaseDate >= :todayStart ORDER BY releaseDate ASC LIMIT :limit")
     suspend fun getUpcoming(todayStart: Long, limit: Int): List<WatchItem>
@@ -87,4 +91,8 @@ interface WatchItemDao {
     /** 只更新分类，不改变 updatedAt（避免自动补全分类后看单顺序跳动） */
     @Query("UPDATE watch_items SET category = :category WHERE id = :id")
     suspend fun updateCategory(id: Long, category: WatchCategory)
+
+    /** 只更新剧集追更进度，不改变 updatedAt */
+    @Query("UPDATE watch_items SET seasonNumber = :season, episodeNumber = :episode WHERE id = :id")
+    suspend fun updateProgress(id: Long, season: Int, episode: Int)
 }

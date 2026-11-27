@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yingshizhuizong.data.entity.WatchStatus
 import com.example.yingshizhuizong.data.stats.CategoryCount
+import com.example.yingshizhuizong.data.stats.SeriesProgressItem
 import com.example.yingshizhuizong.data.stats.WatchStats
 import com.example.yingshizhuizong.data.stats.YearReport
 import com.example.yingshizhuizong.ui.components.color
@@ -85,6 +86,9 @@ fun StatsScreen(
 
             item { OverviewCard(stats) }
             item { StatusCard(stats) }
+            if (stats.seriesInProgress.isNotEmpty()) {
+                item { SeriesProgressCard(stats.seriesInProgress, onItemClick) }
+            }
             if (stats.categories.isNotEmpty()) item { CategoryCard(stats.categories, stats.total) }
             item { MonthlyCard(stats) }
             if (stats.ratedCount > 0) item { RatingCard(stats) }
@@ -173,6 +177,40 @@ private fun StatusCard(stats: WatchStats) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SeriesProgressCard(items: List<SeriesProgressItem>, onItemClick: (Long) -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            SectionTitle("正在追的剧集")
+            Spacer(Modifier.height(8.dp))
+            items.forEach { entry ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onItemClick(entry.item.id) }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            entry.item.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "第${entry.seasonNumber}季 · 第${entry.episodeNumber}集",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text("继续追 →", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }

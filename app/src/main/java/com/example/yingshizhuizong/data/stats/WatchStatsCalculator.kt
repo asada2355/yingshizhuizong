@@ -18,6 +18,13 @@ data class RatingBucket(val score: Int, val count: Int)
 /** 某个月的已看数量 */
 data class MonthCount(val month: Int, val count: Int)
 
+/** 正在追的剧集（有集进度） */
+data class SeriesProgressItem(
+    val item: WatchItem,
+    val seasonNumber: Int,
+    val episodeNumber: Int,
+)
+
 /** 观影统计的完整结果 */
 data class WatchStats(
     val total: Int = 0,
@@ -41,6 +48,8 @@ data class WatchStats(
     val categoriesThisYear: Int = 0,
     /** 评分最高的已看影片 */
     val topRated: WatchItem? = null,
+    /** 正在追的剧集（有集进度且未看完） */
+    val seriesInProgress: List<SeriesProgressItem> = emptyList(),
 )
 
 /** 年度报告：针对某个年份的汇总 */
@@ -118,6 +127,16 @@ object WatchStatsCalculator {
             compareBy<WatchItem> { it.rating }.thenBy { it.watchedAt ?: it.updatedAt }
         )
 
+        // 正在追的剧集：是在看的剧集，且有过集进度
+        val seriesInProgress = items
+            .filter {
+                it.type == WatchType.TV_SERIES &&
+                    it.status == WatchStatus.WATCHING &&
+                    it.seasonNumber > 0
+            }
+            .sortedByDescending { it.updatedAt }
+            .map { SeriesProgressItem(it, it.seasonNumber, it.episodeNumber) }
+
         return WatchStats(
             total = items.size,
             wantCount = items.count { it.status == WatchStatus.WANT },
@@ -134,6 +153,7 @@ object WatchStatsCalculator {
             watchedThisYear = watchedThisYear.size,
             categoriesThisYear = watchedThisYear.map { it.category }.distinct().size,
             topRated = topRated,
+            seriesInProgress = seriesInProgress,
         )
     }
 

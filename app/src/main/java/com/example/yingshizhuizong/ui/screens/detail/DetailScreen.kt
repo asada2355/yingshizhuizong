@@ -3,6 +3,7 @@
 package com.example.yingshizhuizong.ui.screens.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -26,15 +29,19 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,14 +56,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.yingshizhuizong.data.TmdbApi
 import com.example.yingshizhuizong.data.TrailerLink
 import com.example.yingshizhuizong.data.entity.Note
 import com.example.yingshizhuizong.data.entity.WatchItem
+import com.example.yingshizhuizong.data.entity.WatchStatus
+import com.example.yingshizhuizong.data.entity.WatchType
 import com.example.yingshizhuizong.ui.components.PosterImage
+import com.example.yingshizhuizong.ui.components.color
 import com.example.yingshizhuizong.ui.components.label
 import com.example.yingshizhuizong.util.formatDate
 import com.example.yingshizhuizong.util.openYouTube
@@ -75,6 +88,11 @@ fun DetailScreen(
     val trailerLookupFailed by vm.trailerLookupFailed.collectAsStateWithLifecycle()
     val details by vm.details.collectAsStateWithLifecycle()
     val openTrailerExternally by vm.openTrailerExternally.collectAsStateWithLifecycle()
+    val seasons by vm.seasons.collectAsStateWithLifecycle()
+    val episodes by vm.episodes.collectAsStateWithLifecycle()
+    val selectedSeason by vm.selectedSeason.collectAsStateWithLifecycle()
+    val recommendations by vm.recommendations.collectAsStateWithLifecycle()
+    val addedRecommendationIds by vm.addedRecommendationIds.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showAddNote by remember { mutableStateOf(false) }
@@ -125,6 +143,28 @@ fun DetailScreen(
                             }
                         },
                         onRetry = vm::retryTrailerLookup,
+                    )
+                }
+                if (current.type == WatchType.TV_SERIES) {
+                    item {
+                        SeriesProgressCard(
+                            item = current,
+                            seasonsState = seasons,
+                            episodesState = episodes,
+                            selectedSeason = selectedSeason,
+                            onSelectSeason = vm::selectSeason,
+                            onToggleEpisode = vm::toggleEpisode,
+                            onMarkSeasonWatched = vm::markSeasonWatched,
+                            onRetry = vm::retrySeasons,
+                        )
+                    }
+                }
+                item {
+                    RecommendationsCard(
+                        state = recommendations,
+                        addedIds = addedRecommendationIds,
+                        onRetry = vm::retryRecommendations,
+                        onAdd = { rec, onResult -> vm.addRecommendation(rec, onResult) },
                     )
                 }
                 item { CreditsCard(details, vm::retryDetails) }
@@ -326,6 +366,317 @@ private fun OverviewCard(state: DetailsUiState) {
                 )
             }
         }
+    }
+}
+
+/** 剧集追更：季切换 + 进度 + 集列表，可逐集标记看过 */
+@Composable
+private fun SeriesProgressCard(
+    item: WatchItem,
+    seasonsState: SeasonsUiState,
+    episodesState: EpisodesUiState,
+    selectedSeason: Int,
+    onSelectSeason: (Int) -> Unit,
+    onToggleEpisode: (Int, Int, Boolean) -> Unit,
+    onMarkSeasonWatched: (Int) -> Unit,
+    onRetry: () -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "追更进度",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                if (item.seasonNumber > 0) {
+                    Text(
+                        "S${item.seasonNumber} · E${item.episodeNumber}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+
+            when (seasonsState) {
+                is SeasonsUiState.Idle, is SeasonsUiState.Loading -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "正在获取季信息…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                is SeasonsUiState.Unavailable -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "获取失败（可能网络访问不了 TMDB）",
+                            Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(onClick = onRetry) { Text("重试") }
+                    }
+                }
+
+                is SeasonsUiState.Ready -> {
+                    val seasons = seasonsState.seasons
+                    if (seasons.isEmpty()) {
+                        Text(
+                            "这部没有可用的季信息",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        // 进度条：当前季内的集进度
+                        val currentSeasonMeta = seasons.firstOrNull { it.seasonNumber == item.seasonNumber }
+                        if (item.seasonNumber > 0 && currentSeasonMeta != null) {
+                            val total = currentSeasonMeta.episodeCount.coerceAtLeast(0)
+                            val done = item.episodeNumber.coerceIn(0, total)
+                            Text(
+                                "第${item.seasonNumber}季：已看 $done / $total 集",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            LinearProgressIndicator(
+                                progress = { if (total == 0) 0f else done.toFloat() / total },
+                                modifier = Modifier.fillMaxWidth().height(6.dp),
+                            )
+                            Spacer(Modifier.height(12.dp))
+                        }
+
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(seasons, key = { it.seasonNumber }) { season ->
+                                FilterChip(
+                                    selected = season.seasonNumber == selectedSeason,
+                                    onClick = { onSelectSeason(season.seasonNumber) },
+                                    label = { Text("第${season.seasonNumber}季") },
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+
+                        when (episodesState) {
+                            is EpisodesUiState.Idle, is EpisodesUiState.Loading -> {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "正在获取集列表…",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+
+                            is EpisodesUiState.Unavailable -> {
+                                Text(
+                                    "这一季的集列表获取失败",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+
+                            is EpisodesUiState.Ready -> {
+                                val episodes = episodesState.episodes
+                                if (episodes.isEmpty()) {
+                                    Text(
+                                        "暂时没有这一季的信息",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                } else {
+                                    val currentTotal = episodes.size
+                                    TextButton(
+                                        onClick = { onMarkSeasonWatched(selectedSeason) },
+                                        modifier = Modifier.align(Alignment.End),
+                                    ) {
+                                        Text("整季标为已看")
+                                    }
+                                    Column {
+                                        // 只渲染当前季的集，避免长卡片
+                                        episodes.forEach { ep ->
+                                            val watched = when {
+                                                item.seasonNumber == selectedSeason ->
+                                                    item.episodeNumber >= ep.episodeNumber
+                                                item.seasonNumber > selectedSeason -> true
+                                                else -> false
+                                            }
+                                            EpisodeRow(
+                                                episode = ep,
+                                                watched = watched,
+                                                onClick = {
+                                                    onToggleEpisode(selectedSeason, ep.episodeNumber, !watched)
+                                                },
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        "共 $currentTotal 集",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpisodeRow(episode: TmdbApi.Episode, watched: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            shape = androidx.compose.foundation.shape.CircleShape,
+            color = if (watched) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+            modifier = Modifier.size(22.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    if (watched) "✓" else "",
+                    color = if (watched) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "E${episode.episodeNumber}  ${episode.name.ifBlank { "第${episode.episodeNumber}集" }}",
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = if (watched) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+            )
+            if (episode.airDate != null) {
+                Text(
+                    formatDate(episode.airDate),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** 相似影片：横向海报列表，一键加入看单 */
+@Composable
+private fun RecommendationsCard(
+    state: RecommendationsUiState,
+    addedIds: Set<Int>,
+    onRetry: () -> Unit,
+    onAdd: (TmdbApi.Recommendation, (String) -> Unit) -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "相似影片",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                when (state) {
+                    is RecommendationsUiState.Unavailable -> TextButton(onClick = onRetry) { Text("重试") }
+                    is RecommendationsUiState.Loading -> CircularProgressIndicator(
+                        Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    else -> Unit
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+
+            when (state) {
+                is RecommendationsUiState.Idle, is RecommendationsUiState.Loading -> {
+                    Text(
+                        "正在获取相似影片…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                is RecommendationsUiState.Unavailable -> {
+                    Text(
+                        "暂时获取不到推荐（网络访问不了 TMDB）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                is RecommendationsUiState.Ready -> {
+                    val list = state.items
+                    if (list.isEmpty()) {
+                        Text(
+                            "没有找到相似影片",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            items(list, key = { "${it.type}_${it.tmdbId}" }) { rec ->
+                                RecommendationItem(
+                                    rec = rec,
+                                    added = rec.tmdbId in addedIds,
+                                    onAdd = { onAdd(rec) {} },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecommendationItem(rec: TmdbApi.Recommendation, added: Boolean, onAdd: () -> Unit) {
+    Column(Modifier.width(104.dp)) {
+        PosterImage(rec.posterUrl, Modifier.fillMaxWidth().height(156.dp))
+        Spacer(Modifier.height(6.dp))
+        Text(
+            rec.title,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            fontWeight = FontWeight.Medium,
+        )
+        Text(
+            buildString {
+                rec.releaseDate?.let { append(com.example.yingshizhuizong.util.yearOf(it) ?: "") }
+                if (rec.rating > 0f) {
+                    if (isNotEmpty()) append(" · ")
+                    append("★%.1f".format(rec.rating))
+                }
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(4.dp))
+        AssistChip(
+            onClick = { if (!added) onAdd() },
+            label = { Text(if (added) "已添加" else "加入看单") },
+        )
     }
 }
 

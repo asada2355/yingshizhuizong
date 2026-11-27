@@ -102,6 +102,58 @@ class Repository(context: Context, private val db: AppDatabase) {
         watchItems.updateCategory(itemId, category)
     }
 
+    /** 更新剧集追更进度（看到第几季第几集） */
+    suspend fun updateProgress(itemId: Long, season: Int, episode: Int) {
+        watchItems.updateProgress(itemId, season, episode)
+    }
+
+    /**
+     * 拉取剧集的季 / 集信息，失败返回 null。
+     * 会先把 TMDB id 解析出来（老数据第一次会查一次并写库）。
+     */
+    suspend fun fetchSeasons(item: WatchItem): List<TmdbApi.Season>? {
+        val id = resolveTmdbId(item)
+        if (id <= 0) return null
+        return TmdbApi.fetchSeasons(id)
+    }
+
+    /** 拉取某一季的集列表，失败返回 null */
+    suspend fun fetchEpisodes(item: WatchItem, seasonNumber: Int): List<TmdbApi.Episode>? {
+        val id = resolveTmdbId(item)
+        if (id <= 0) return null
+        return TmdbApi.fetchSeasonEpisodes(id, seasonNumber)
+    }
+
+    /** 拉取相似影片，失败返回 null */
+    suspend fun fetchRecommendations(item: WatchItem): List<TmdbApi.Recommendation>? {
+        val id = resolveTmdbId(item)
+        if (id <= 0) return null
+        return TmdbApi.fetchRecommendations(item.type, id)
+    }
+
+    /** 判断某个 TMDB 作品是否已经在看单里 */
+    suspend fun containsTmdbId(tmdbId: Int): Boolean =
+        watchItems.countByTmdbId(tmdbId) > 0
+
+    /** 把相似影片一键加入看单（默认「想看」） */
+    suspend fun addRecommendation(rec: TmdbApi.Recommendation): Long {
+        val now = System.currentTimeMillis()
+        return saveWatchItem(
+            WatchItem(
+                title = rec.title,
+                originalTitle = rec.originalTitle,
+                type = rec.type,
+                status = WatchStatus.WANT,
+                category = rec.category,
+                posterUrl = rec.posterUrl,
+                releaseDate = rec.releaseDate,
+                tmdbId = rec.tmdbId,
+                createdAt = now,
+                updatedAt = now,
+            )
+        )
+    }
+
     /**
      * 详情页拿到 TMDB 类型后，若影片还是「其他」就自动补全分类。
      * 用户手动选过的分类不会被覆盖。
