@@ -39,11 +39,13 @@ class WatchlistWidgetProvider : AppWidgetProvider() {
                         val db = AppDatabase.getInstance(context)
                         val item = db.watchItemDao().getById(itemId)
                         if (item != null && item.status != WatchStatus.WATCHED) {
+                            val now = System.currentTimeMillis()
                             db.watchItemDao().update(
                                 item.copy(
                                     status = WatchStatus.WATCHED,
                                     reminderEnabled = false,
-                                    updatedAt = System.currentTimeMillis(),
+                                    watchedAt = now,
+                                    updatedAt = now,
                                 )
                             )
                         }

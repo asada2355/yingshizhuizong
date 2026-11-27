@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.yingshizhuizong.YingshiApp
+import com.example.yingshizhuizong.data.watchedAtFor
 import com.example.yingshizhuizong.data.entity.WatchCategory
 import com.example.yingshizhuizong.data.entity.WatchItem
 import com.example.yingshizhuizong.data.entity.WatchStatus
@@ -57,7 +58,14 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setStatus(item: WatchItem, status: WatchStatus) {
         viewModelScope.launch {
-            repo.saveWatchItem(item.copy(status = status, updatedAt = System.currentTimeMillis()))
+            val now = System.currentTimeMillis()
+            repo.saveWatchItem(
+                item.copy(
+                    status = status,
+                    watchedAt = watchedAtFor(status, item.status, item.watchedAt, now),
+                    updatedAt = now
+                )
+            )
         }
     }
 

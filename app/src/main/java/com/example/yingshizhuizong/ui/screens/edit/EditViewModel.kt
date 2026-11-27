@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.yingshizhuizong.YingshiApp
+import com.example.yingshizhuizong.data.watchedAtFor
 import com.example.yingshizhuizong.data.entity.WatchCategory
 import com.example.yingshizhuizong.data.entity.WatchItem
 import com.example.yingshizhuizong.data.entity.WatchStatus
@@ -89,6 +90,12 @@ class EditViewModel(
                 notifiedForDate = if (old != null && old.releaseDate == releaseDate.value) {
                     old.notifiedForDate
                 } else null,
+                watchedAt = watchedAtFor(
+                    newStatus = status.value,
+                    oldStatus = old?.status,
+                    oldWatchedAt = old?.watchedAt,
+                    now = now
+                ),
                 trailerKey = if (keepTrailer) old?.trailerKey.orEmpty() else "",
                 trailerName = if (keepTrailer) old?.trailerName.orEmpty() else "",
                 trailerUrl = trailerUrlValue,

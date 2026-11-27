@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -26,6 +27,7 @@ import com.example.yingshizhuizong.ui.screens.detail.DetailScreen
 import com.example.yingshizhuizong.ui.screens.edit.EditScreen
 import com.example.yingshizhuizong.ui.screens.search.SearchScreen
 import com.example.yingshizhuizong.ui.screens.settings.SettingsScreen
+import com.example.yingshizhuizong.ui.screens.stats.StatsScreen
 import com.example.yingshizhuizong.ui.screens.trailer.TrailerScreen
 import com.example.yingshizhuizong.ui.screens.upcoming.UpcomingScreen
 import com.example.yingshizhuizong.ui.screens.watchlist.WatchlistScreen
@@ -33,6 +35,7 @@ import com.example.yingshizhuizong.ui.screens.watchlist.WatchlistScreen
 object Routes {
     const val WATCHLIST = "watchlist"
     const val UPCOMING = "upcoming"
+    const val STATS = "stats"
     const val SETTINGS = "settings"
     const val SEARCH = "search"
     const val DETAIL = "detail/{itemId}"
@@ -49,6 +52,7 @@ data class BottomItem(val route: String, val label: String, val icon: ImageVecto
 private val bottomItems = listOf(
     BottomItem(Routes.WATCHLIST, "看单", Icons.Filled.List),
     BottomItem(Routes.UPCOMING, "上映", Icons.Filled.DateRange),
+    BottomItem(Routes.STATS, "统计", Icons.Filled.BarChart),
     BottomItem(Routes.SETTINGS, "设置", Icons.Filled.Settings),
 )
 
@@ -102,6 +106,9 @@ fun AppRoot() {
             }
             composable(Routes.UPCOMING) {
                 UpcomingScreen(onItemClick = { navController.navigate(Routes.detail(it)) })
+            }
+            composable(Routes.STATS) {
+                StatsScreen(onItemClick = { navController.navigate(Routes.detail(it)) })
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen()

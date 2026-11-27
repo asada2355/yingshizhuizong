@@ -24,6 +24,8 @@ data class WatchItem(
     val reminderEnabled: Boolean = false,
     /** 已对哪个上映日期发过提醒（避免重复） */
     val notifiedForDate: Long? = null,
+    /** 标记为「已看」的时间（epoch 毫秒），用于观影统计与年度报告；null 表示还没看 */
+    val watchedAt: Long? = null,
     /** TMDB 的作品 id（用于拉取简介、演职员、预告片），0 表示尚未解析 */
     @ColumnInfo(defaultValue = "0")
     val tmdbId: Int = 0,
